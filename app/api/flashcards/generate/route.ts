@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { CohereClient } from 'cohere-ai'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
-const WEBHOOK_URL = 'http://localhost:3001/flashcard'
-const WEBHOOK_SECRET = 'fe6bb274f1e8e296e595e3cad1f0a0138dba68eca8d85b3e'
+const COHERE_API_KEY = process.env.COHERE_API_KEY!
 
 interface Word {
   id: string
@@ -18,6 +18,7 @@ interface Word {
 }
 
 async function getUnusedWords(): Promise<Word[]> {
+  const supabaseAdmin = getSupabaseAdmin()
   const { data, error } = await supabaseAdmin
     .from('word_bank')
     .select('*')
@@ -28,8 +29,26 @@ async function getUnusedWords(): Promise<Word[]> {
   return data || []
 }
 
+function cleanJSON(raw: string): string {
+  let s = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
+  let open = (s.match(/\{/g) || []).length
+  let close = (s.match(/\}/g) || []).length
+  while (open > close && open > 0) {
+    const lp = s.lastIndexOf('}')
+    if (lp > 0) s = s.slice(0, lp + 1)
+    open--
+  }
+  return s
+}
+
+const FLASHCARD_PROMPT = `You are a flashcard generator. Answer ONLY with valid JSON, no markdown.
+Question: {question} | Correct: {correct} | Explanation: {explanation}
+Return JSON: {"front":"question in Japanese","back":"answer + brief explanation in Japanese"}`
+
 export async function POST(request: NextRequest) {
   try {
+    const cohere = new CohereClient({ token: COHERE_API_KEY })
+    const supabaseAdmin = getSupabaseAdmin()
     const { source, questions } = await request.json()
 
     let wordsToGenerate: Array<{ word: string; meaning_jp: string; meaning_en?: string; example_jp?: string; id?: string }> = []
@@ -67,24 +86,25 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const res = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': WEBHOOK_SECRET
-          },
-          body: JSON.stringify({
-            task: 'generate_flashcard',
-            question_text: `「${w.word}」の意味を教えてください。`,
-            correct_answer: w.meaning_jp,
-            explanation_jp: w.example_jp || ''
-          })
+        const prompt = FLASHCARD_PROMPT
+          .replace('{question}', `「${w.word}」の意味を教えてください。`)
+          .replace('{correct}', w.meaning_jp)
+          .replace('{explanation}', w.example_jp || '')
+
+        const response = await cohere.chat({
+          model: 'command-r7b-12-2024',
+          message: prompt,
+          maxTokens: 500,
+          temperature: 0.2,
         })
 
-        const data = await res.json()
+        const raw = response.text || ''
+        const cleaned = cleanJSON(raw)
+        let data
+        try { data = JSON.parse(cleaned) }
+        catch { data = { front: cleaned.slice(0, 200), back: cleaned.slice(200, 400) } }
 
         if (data.front && data.back) {
-          // Check for duplicate front_text
           const { data: existing } = await supabaseAdmin
             .from('flashcards')
             .select('id')
@@ -107,8 +127,6 @@ export async function POST(request: NextRequest) {
           if (!error) {
             results.success++
             results.cards.push({ front: data.front, back: data.back })
-
-            // Mark word bank entry as used
             if (w.id) usedWordIds.push(w.id)
           } else {
             results.failed++
@@ -120,11 +138,9 @@ export async function POST(request: NextRequest) {
         results.failed++
       }
 
-      // Small delay between calls to avoid rate limiting
       await new Promise(r => setTimeout(r, 300))
     }
 
-    // Mark used words in word_bank
     if (usedWordIds.length > 0) {
       await supabaseAdmin
         .from('word_bank')

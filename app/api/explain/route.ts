@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { CohereClient } from 'cohere-ai'
 
-const WEBHOOK_URL = 'http://localhost:3001/webhook'
-const WEBHOOK_SECRET = 'fe6bb274f1e8e296e595e3cad1f0a0138dba68eca8d85b3e'
+const COHERE_API_KEY = process.env.COHERE_API_KEY!
 
 interface VocabItem {
   term: string
@@ -12,10 +12,8 @@ interface VocabItem {
   example_en?: string
 }
 
-// Fix Chinese chars that AI sometimes outputs in Japanese text
 function sanitizeJapanese(text: string): string {
   if (!text) return text
-  // Most common Chinese→Japanese conversions for IT context
   const replacements: Record<string, string> = {
     '生产': '生産', '资料': '資料', '编码': '符号', '网络': 'ネットワーク',
     '计算机': 'コンピュータ', '软件': 'ソフトウェア', '硬件': 'ハードウェア',
@@ -25,7 +23,7 @@ function sanitizeJapanese(text: string): string {
     '服务': 'サービス', '平台': 'プラットフォーム', '安全': '安全',
     '威胁': '脅威', '攻击': '攻撃', '访问': 'アクセス', '认证': '認証',
     '授权': '認可', '密码': 'パスワード', '加密': '暗号化', '密钥': '鍵',
-    '存储': '格納', '处理': '処理', '分析': '分析', '预测': '予測',
+    '存储': '格納', '处理': '処理', '分析': '分析', '予測': '予測',
     '优化': '最適化', '模拟': 'シミュレーション', '虚拟': '仮想',
     '连接': '接続', '设备': 'デバイス', '终端': '端末', '云端': 'クラウド',
     '服务器': 'サーバー', '客户端': 'クライアント', '架构': 'アーキテクチャ',
@@ -45,31 +43,68 @@ function sanitizeJapanese(text: string): string {
   return result
 }
 
+function cleanJSON(raw: string): string {
+  let s = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
+  let open = (s.match(/\{/g) || []).length
+  let close = (s.match(/\}/g) || []).length
+  while (open > close && open > 0) {
+    const lp = s.lastIndexOf('}')
+    if (lp > 0) s = s.slice(0, lp + 1)
+    open--
+  }
+  return s
+}
+
+const EXPLAIN_PROMPT = `You are a Japanese IT exam tutor. Answer ONLY with valid JSON, no markdown.
+
+Question: {question}
+Choices:
+ア: {a}
+イ: {b}
+ウ: {c}
+エ: {d}
+
+Correct answer: {correct}
+Your answer: {user}
+
+Return valid JSON with this exact structure (no markdown, no extra text):
+{
+  "choices": {
+    "ア": {"jp": "Japanese explanation for why this is right or wrong", "en": "English explanation"},
+    "イ": {"jp": "Japanese explanation", "en": "English explanation"},
+    "ウ": {"jp": "Japanese explanation", "en": "English explanation"},
+    "エ": {"jp": "Japanese explanation", "en": "English explanation"}
+  },
+  "vocabulary": [
+    {"word": "technical term", "meaning_jp": "Japanese meaning", "meaning_en": "English meaning", "example_jp": "example sentence in Japanese"}
+  ]
+}`
+
 export async function POST(request: NextRequest) {
   try {
+    const cohere = new CohereClient({ token: COHERE_API_KEY })
     const body = await request.json()
 
-    // Transform keys for webhook
-    const webhookBody = {
-      task: 'explain',
-      question_text: body.questionText,
-      choices: body.options,
-      correct_answer: body.correctAnswer,
-      user_answer: body.userAnswer
-    }
+    const prompt = EXPLAIN_PROMPT
+      .replace('{question}', body.questionText || '')
+      .replace('{a}', body.options?.['ア'] || '')
+      .replace('{b}', body.options?.['イ'] || '')
+      .replace('{c}', body.options?.['ウ'] || '')
+      .replace('{d}', body.options?.['エ'] || '')
+      .replace('{correct}', body.correctAnswer || '')
+      .replace('{user}', body.userAnswer || '')
 
-    const webhookRes = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-token': WEBHOOK_SECRET
-      },
-      body: JSON.stringify(webhookBody)
+    const response = await cohere.chat({
+      model: 'command-r7b-12-2024',
+      message: prompt,
+      maxTokens: 1200,
+      temperature: 0.2,
     })
 
-    const data = await webhookRes.json()
+    const raw = response.text || ''
+    const cleaned = cleanJSON(raw)
+    let data = JSON.parse(cleaned)
 
-    // Sanitize per-choice explanations
     if (data.choices) {
       for (const key of ['ア', 'イ', 'ウ', 'エ']) {
         if (data.choices[key]) {
@@ -80,7 +115,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sanitize vocabulary
     if (data.vocabulary) {
       data.vocabulary = (data.vocabulary as VocabItem[]).map((v: VocabItem) => ({
         ...v,
