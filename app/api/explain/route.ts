@@ -64,16 +64,23 @@ Choices:
 ウ: {c}
 エ: {d}
 
-Correct answer: {correct}
-Your answer: {user}
+Correct answer (multiple may be correct): {correct}
+User's answer: {user}
+
+For EACH choice (ア, イ, ウ, エ), you must:
+1. State whether this choice is correct or incorrect
+2. Give a CLEAR, SPECIFIC reason why it is correct OR why it is NOT correct
+3. For incorrect choices: explain exactly what detail makes them wrong — do not just say "incorrect", explain WHY
+4. For correct choices: explain exactly what detail makes them right
+5. Be precise and consistent — never contradict yourself between choices
 
 Return valid JSON with this exact structure (no markdown, no extra text):
 {
   "choices": {
-    "ア": {"jp": "Japanese explanation for why this is right or wrong", "en": "English explanation"},
-    "イ": {"jp": "Japanese explanation", "en": "English explanation"},
-    "ウ": {"jp": "Japanese explanation", "en": "English explanation"},
-    "エ": {"jp": "Japanese explanation", "en": "English explanation"}
+    "ア": {"result": "correct" or "incorrect", "jp": "Japanese explanation in 1-2 sentences: why this is correct OR exactly what detail makes it incorrect", "en": "English explanation"},
+    "イ": {"result": "correct" or "incorrect", "jp": "Japanese explanation", "en": "English explanation"},
+    "ウ": {"result": "correct" or "incorrect", "jp": "Japanese explanation", "en": "English explanation"},
+    "エ": {"result": "correct" or "incorrect", "jp": "Japanese explanation", "en": "English explanation"}
   },
   "vocabulary": [
     {"word": "technical term", "meaning_jp": "Japanese meaning", "meaning_en": "English meaning", "example_jp": "example sentence in Japanese"}

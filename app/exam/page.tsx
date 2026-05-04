@@ -13,7 +13,7 @@ interface Question {
   correct_answer: 'ア' | 'イ' | 'ウ' | 'エ'
 }
 interface Explanation {
-  choices?: { ア?: { jp: string; en: string }; イ?: { jp: string; en: string }; ウ?: { jp: string; en: string }; エ?: { jp: string; en: string } }
+  choices?: { ア?: { result: string; jp: string; en: string }; イ?: { result: string; jp: string; en: string }; ウ?: { result: string; jp: string; en: string }; エ?: { result: string; jp: string; en: string } }
   vocabulary?: { word: string; meaning_jp: string; meaning_en: string; example_jp?: string }[]
 }
 
