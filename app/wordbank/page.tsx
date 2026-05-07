@@ -42,8 +42,8 @@ function WordBankInner() {
 
   useEffect(() => {
     const url = pageFilter
-      ? `${process.env.NEXT_PUBLIC_API_URL}/api/words?page=${pageFilter}`
-      : `${process.env.NEXT_PUBLIC_API_URL}/api/words?all=true`
+      ? `/api/words?page=${pageFilter}`
+      : `/api/words?all=true`
     fetch(url)
       .then(r => r.json())
       .then(d => {
@@ -76,7 +76,7 @@ function WordBankInner() {
     if (markingId) return
     setMarkingId(word.id)
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/words/study`, {
+      await fetch(`/api/words/study`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word_id: word.id }),

@@ -107,7 +107,7 @@ export default function PagesPage() {
   const [selected, setSelected] = useState<PageItem | null>(null)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pages`)
+    fetch(`/api/pages`)
       .then(r => r.json())
       .then(d => { if (d.success) setPages(d.pages) })
       .catch(() => {})

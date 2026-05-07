@@ -35,7 +35,7 @@ function StudyInner() {
   const selectedWord = words[selectedIndex]
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/words?page=${page}`)
+    fetch(`/api/words?page=${page}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -56,7 +56,7 @@ function StudyInner() {
     if (!selectedWord || marking) return
     setMarking(true)
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/words/study`, {
+      await fetch(`/api/words/study`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word_id: selectedWord.id }),

@@ -31,7 +31,7 @@ function FlashcardsInner() {
   const current = displayCards[currentIndex]
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards`)
+    fetch(`/api/flashcards`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
